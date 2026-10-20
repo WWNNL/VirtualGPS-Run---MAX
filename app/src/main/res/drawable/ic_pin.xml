@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 固定定位点：水滴形地图针，白色描边打底 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="34dp"
+    android:height="44dp"
+    android:viewportWidth="56"
+    android:viewportHeight="72">
+
+    <!-- 白色光晕 -->
+    <path
+        android:pathData="M28,8 A16,16 0 1,0 28,40 A16,16 0 1,0 28,8 Z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M20.5,33 L35.5,33 L28,58 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- 紫色针体（跟卡片容器同一个体系） -->
+    <path
+        android:pathData="M28,11 A13,13 0 1,0 28,37 A13,13 0 1,0 28,11 Z"
+        android:fillColor="#6C5CE7" />
+    <path
+        android:pathData="M23,31 L33,31 L28,53 Z"
+        android:fillColor="#6C5CE7" />
+
+    <!-- 中心白点 -->
+    <path
+        android:pathData="M28,18 A6,6 0 1,0 28,30 A6,6 0 1,0 28,18 Z"
+        android:fillColor="#FFFFFF" />
+</vector>

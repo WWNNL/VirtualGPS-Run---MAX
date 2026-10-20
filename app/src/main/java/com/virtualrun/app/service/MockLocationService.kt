@@ -15,6 +15,8 @@ import androidx.core.app.NotificationCompat
 import com.google.android.gms.maps.model.LatLng
 import com.virtualrun.app.MainActivity
 import com.virtualrun.app.R
+import com.virtualrun.app.algorithm.GpsQuality
+import com.virtualrun.app.algorithm.InjectScenario
 import com.virtualrun.app.model.Route
 import java.util.Locale
 
@@ -36,12 +38,18 @@ class MockLocationService : Service() {
         private const val WAKELOCK_TIMEOUT_MS = 10 * 60 * 60 * 1000L
 
         const val ACTION_START_MOCK = "com.virtualrun.action.START_MOCK"
+        const val ACTION_START_FIXED = "com.virtualrun.action.START_FIXED"
         const val ACTION_STOP_MOCK = "com.virtualrun.action.STOP_MOCK"
         const val ACTION_UPDATE_PARAMS = "com.virtualrun.action.UPDATE_PARAMS"
 
         const val EXTRA_PACE = "extra_pace"
         const val EXTRA_ROUTE_POINTS = "extra_route_points"
         const val EXTRA_IS_LOOP = "extra_is_loop"
+        const val EXTRA_IS_FIXED = "extra_is_fixed"
+        const val EXTRA_FIXED_LAT = "extra_fixed_lat"
+        const val EXTRA_FIXED_LNG = "extra_fixed_lng"
+        const val EXTRA_SCENARIO = "extra_scenario"
+        const val EXTRA_QUALITY = "extra_quality"
 
         const val BROADCAST_ACTION_STATE_UPDATE = "com.virtualrun.broadcast.STATE_UPDATE"
         const val BROADCAST_EXTRA_LAT = "extra_lat"
@@ -85,6 +93,12 @@ class MockLocationService : Service() {
     private var currentPace = 6.0f
     private var currentRoutePoints: ArrayList<LatLng>? = null
     private var currentIsLoop = false
+    private var currentIsFixed = false
+    private var currentFixedLat = 0.0
+    private var currentFixedLng = 0.0
+    private var currentScenario: InjectScenario = InjectScenario.NATURAL
+    private var currentQuality: GpsQuality = GpsQuality.HIGH
+    private var currentLogFile: java.io.File? = null
     private var lastResult: com.virtualrun.app.algorithm.PositionResult? = null
     private var terminalStateBroadcast = false
     private var lastNotificationAt = 0L
@@ -103,30 +117,48 @@ class MockLocationService : Service() {
                 Log.d(TAG, "Action: START_MOCK")
                 currentPace = intent.getFloatExtra(EXTRA_PACE, 6.0f)
                 currentIsLoop = intent.getBooleanExtra(EXTRA_IS_LOOP, false)
+                currentIsFixed = false
                 currentRoutePoints = intent.getParcelableArrayListExtra(EXTRA_ROUTE_POINTS)
+                val scenario = parseScenario(intent.getStringExtra(EXTRA_SCENARIO))
+                val quality = parseQuality(intent.getStringExtra(EXTRA_QUALITY))
+                currentScenario = scenario
+                currentQuality = quality
+                currentLogFile = InjectLog.beginSession(this, scenario, quality, "route")
 
                 val points = currentRoutePoints
                 if (points != null && points.size >= 2) {
                     val route = Route.fromLatLngPoints(points)
-                    val activeSession = ++session
-                    terminalStateBroadcast = false
-                    startForeground(NOTIFICATION_ID, buildNotification())
-                    pump.start(route, currentPace, currentIsLoop) { result ->
-                        mainHandler.post {
-                            if (session == activeSession && !terminalStateBroadcast) {
-                                lastResult = result
-                                broadcastUpdate(result)
-                                if (SystemClock.elapsedRealtime() - lastNotificationAt >= 1000L) {
-                                    lastNotificationAt = SystemClock.elapsedRealtime()
-                                    updateNotification(result)
-                                }
-                                if (result.isCompleted) stopMockImmediately()
-                            }
-                        }
+                    val activeSession = beginSession()
+                    pump.start(route, currentPace, currentIsLoop, scenario, quality) { result ->
+                        onPumpPosition(activeSession, result)
                     }
                 } else {
                     broadcastTerminalState()
                     stopSelf()
+                }
+            }
+            ACTION_START_FIXED -> {
+                val lat = intent.getDoubleExtra(EXTRA_FIXED_LAT, Double.NaN)
+                val lng = intent.getDoubleExtra(EXTRA_FIXED_LNG, Double.NaN)
+                Log.d(TAG, "Action: START_FIXED lat=$lat lng=$lng")
+                if (lat.isNaN() || lng.isNaN()) {
+                    broadcastTerminalState()
+                    stopSelf()
+                } else {
+                    currentPace = 0f
+                    currentIsLoop = false
+                    currentIsFixed = true
+                    currentFixedLat = lat
+                    currentFixedLng = lng
+                    currentRoutePoints = null
+                    currentScenario = InjectScenario.NATURAL
+                    val quality = parseQuality(intent.getStringExtra(EXTRA_QUALITY))
+                    currentQuality = quality
+                    currentLogFile = InjectLog.beginSession(this, InjectScenario.NATURAL, quality, "fixed")
+                    val activeSession = beginSession()
+                    pump.startStatic(lat, lng, quality) { result ->
+                        onPumpPosition(activeSession, result)
+                    }
                 }
             }
             ACTION_UPDATE_PARAMS -> {
@@ -149,9 +181,40 @@ class MockLocationService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun parseScenario(name: String?): InjectScenario =
+        InjectScenario.entries.firstOrNull { it.name == name } ?: InjectScenario.NATURAL
+
+    private fun parseQuality(name: String?): GpsQuality =
+        GpsQuality.entries.firstOrNull { it.name == name } ?: GpsQuality.HIGH
+
+    /** 统一开启一次新会话：切换 session 号、重置状态并拉起前台通知。 */
+    private fun beginSession(): Long {
+        val activeSession = ++session
+        terminalStateBroadcast = false
+        startForeground(NOTIFICATION_ID, buildNotification())
+        return activeSession
+    }
+
+    /** 轨迹/固定定位共用的位置回调，过期会话的结果直接丢弃。 */
+    private fun onPumpPosition(activeSession: Long, result: com.virtualrun.app.algorithm.PositionResult) {
+        mainHandler.post {
+            if (session == activeSession && !terminalStateBroadcast) {
+                lastResult = result
+                broadcastUpdate(result)
+                if (SystemClock.elapsedRealtime() - lastNotificationAt >= 1000L) {
+                    lastNotificationAt = SystemClock.elapsedRealtime()
+                    updateNotification(result)
+                }
+                if (result.isCompleted) stopMockImmediately()
+            }
+        }
+    }
+
     private fun stopMockImmediately() {
         ++session
         pump.stop()
+        InjectLog.endSession()
+        currentLogFile = null
         lastResult = null
         broadcastTerminalState()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -172,6 +235,11 @@ class MockLocationService : Service() {
             putExtra(BROADCAST_EXTRA_RUNNING, running)
             putExtra(EXTRA_PACE, currentPace)
             putExtra(EXTRA_IS_LOOP, currentIsLoop)
+            putExtra(EXTRA_IS_FIXED, currentIsFixed)
+            putExtra(EXTRA_SCENARIO, currentScenario.name)
+            putExtra(EXTRA_QUALITY, currentQuality.name)
+            putExtra(EXTRA_FIXED_LAT, currentFixedLat)
+            putExtra(EXTRA_FIXED_LNG, currentFixedLng)
             putParcelableArrayListExtra(EXTRA_ROUTE_POINTS, currentRoutePoints)
         }
         if (result.isCompleted) terminalStateBroadcast = true
@@ -192,6 +260,7 @@ class MockLocationService : Service() {
 
     override fun onDestroy() {
         ++session
+        InjectLog.endSession()
         if (!terminalStateBroadcast) broadcastTerminalState()
         pump.close()
         mainHandler.removeCallbacksAndMessages(null)
@@ -233,16 +302,19 @@ class MockLocationService : Service() {
         )
 
         val result = lastResult
-        val statusText = if (result == null) {
+        val statusText = if (currentIsFixed) {
+            String.format(Locale.getDefault(), "固定位置 · %.5f, %.5f", currentFixedLat, currentFixedLng)
+        } else if (result == null) {
             "正在准备虚拟定位..."
         } else {
             val progressPercent = (result.progress * 100).coerceIn(0f, 100f)
             val lapText = if (currentIsLoop) " · 第${result.lapCount + 1}圈" else ""
-            String.format(Locale.getDefault(), "%.1f 分/km · %.0f%%%s", currentPace, progressPercent, lapText)
+            val sceneText = if (currentScenario == InjectScenario.NATURAL) "" else " · ${currentScenario.label}"
+            String.format(Locale.getDefault(), "%.1f 分/km · %.0f%%%s%s", currentPace, progressPercent, lapText, sceneText)
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("虚拟跑步进行中")
+            .setContentTitle(if (currentIsFixed) "固定定位进行中" else "虚拟跑步进行中")
             .setContentText(statusText)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)

@@ -9,7 +9,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
+import com.virtualrun.app.algorithm.GpsQuality
+import com.virtualrun.app.algorithm.InjectScenario
 import com.virtualrun.app.algorithm.TrajectoryUtils
+import com.virtualrun.app.map.CoordinateConverter
 import com.virtualrun.app.model.Route
 import com.virtualrun.app.service.MockLocationService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +20,25 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/** 模拟模式：跑步路线 / 固定定位。 */
+enum class SimMode { ROUTE, FIXED }
+
 class MainViewModel : ViewModel() {
+    private val _mode = MutableStateFlow(SimMode.ROUTE)
+    val mode: StateFlow<SimMode> = _mode.asStateFlow()
+
+    /** 注入场景预设（对冲测试用）。 */
+    private val _scenario = MutableStateFlow(InjectScenario.NATURAL)
+    val scenario: StateFlow<InjectScenario> = _scenario.asStateFlow()
+
+    /** GPS 信号质量档位（对冲测试用）。 */
+    private val _quality = MutableStateFlow(GpsQuality.HIGH)
+    val quality: StateFlow<GpsQuality> = _quality.asStateFlow()
+
+    /** 固定定位点，存的是地图显示坐标（GCJ-02）。 */
+    private val _fixedPoint = MutableStateFlow<LatLng?>(null)
+    val fixedPoint: StateFlow<LatLng?> = _fixedPoint.asStateFlow()
+
     private val _routePoints = MutableStateFlow<List<LatLng>>(emptyList())
     val routePoints: StateFlow<List<LatLng>> = _routePoints.asStateFlow()
 
@@ -74,6 +95,22 @@ class MainViewModel : ViewModel() {
                 if (intent.hasExtra(MockLocationService.EXTRA_IS_LOOP)) {
                     _isLoopMode.value = intent.getBooleanExtra(MockLocationService.EXTRA_IS_LOOP, false)
                 }
+                intent.getStringExtra(MockLocationService.EXTRA_SCENARIO)?.let { name ->
+                    InjectScenario.entries.firstOrNull { it.name == name }?.let { _scenario.value = it }
+                }
+                intent.getStringExtra(MockLocationService.EXTRA_QUALITY)?.let { name ->
+                    GpsQuality.entries.firstOrNull { it.name == name }?.let { _quality.value = it }
+                }
+                val fixed = intent.getBooleanExtra(MockLocationService.EXTRA_IS_FIXED, false)
+                if (fixed) {
+                    _mode.value = SimMode.FIXED
+                    val lat = intent.getDoubleExtra(MockLocationService.EXTRA_FIXED_LAT, Double.NaN)
+                    val lng = intent.getDoubleExtra(MockLocationService.EXTRA_FIXED_LNG, Double.NaN)
+                    if (!lat.isNaN() && !lng.isNaN()) {
+                        val gcj = CoordinateConverter.wgs84ToGcj02(lat, lng)
+                        _fixedPoint.value = LatLng(gcj.first, gcj.second)
+                    }
+                }
 
                 _isRunning.value = running
 
@@ -100,6 +137,64 @@ class MainViewModel : ViewModel() {
             context.unregisterReceiver(stateReceiver)
         } catch (e: Exception) {
             Log.e("MainViewModel", "Error unregistering receiver", e)
+        }
+    }
+
+    /** 切换模式：运行中不允许切换，切换时清空另一种模式的选点，避免混在一起。 */
+    fun setMode(mode: SimMode) {
+        if (_isRunning.value || _mode.value == mode) return
+        _mode.value = mode
+        when (mode) {
+            SimMode.FIXED -> {
+                _routePoints.value = emptyList()
+                _isLoopMode.value = false
+                _progress.value = 0f
+                _lapCount.value = 0
+            }
+            SimMode.ROUTE -> _fixedPoint.value = null
+        }
+    }
+
+    fun setScenario(scenario: InjectScenario) {
+        if (_isRunning.value) return
+        _scenario.value = scenario
+    }
+
+    fun setQuality(quality: GpsQuality) {
+        if (_isRunning.value) return
+        _quality.value = quality
+    }
+
+    fun setFixedPoint(latLng: LatLng) {
+        if (_isRunning.value) return
+        _fixedPoint.value = latLng
+    }
+
+    fun clearFixedPoint() {
+        if (_isRunning.value) return
+        _fixedPoint.value = null
+    }
+
+    /** 固定定位起跑：把显示坐标(GCJ-02)换回 WGS-84 再投递给系统。 */
+    fun startFixed(context: Context) {
+        val point = _fixedPoint.value ?: return
+        val wgs = CoordinateConverter.gcj02ToWgs84(point.latitude, point.longitude)
+        try {
+            val serviceIntent = Intent(context, MockLocationService::class.java).apply {
+                action = MockLocationService.ACTION_START_FIXED
+                putExtra(MockLocationService.EXTRA_FIXED_LAT, wgs.first)
+                putExtra(MockLocationService.EXTRA_FIXED_LNG, wgs.second)
+                putExtra(MockLocationService.EXTRA_QUALITY, _quality.value.name)
+            }
+            context.startForegroundService(serviceIntent)
+            _progress.value = 0f
+            _currentLocation.value = null
+            _speed.value = 0f
+            _lapCount.value = 0
+            _isRunning.value = true
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Error starting fixed mock", e)
+            _isRunning.value = false
         }
     }
 
@@ -144,6 +239,7 @@ class MainViewModel : ViewModel() {
     }
 
     fun clearRoute() {
+        _fixedPoint.value = null
         _routePoints.value = emptyList()
         _progress.value = 0f
         _lapCount.value = 0
@@ -178,6 +274,8 @@ class MainViewModel : ViewModel() {
                 action = MockLocationService.ACTION_START_MOCK
                 putExtra(MockLocationService.EXTRA_PACE, _basePace.value)
                 putExtra(MockLocationService.EXTRA_IS_LOOP, _isLoopMode.value)
+                putExtra(MockLocationService.EXTRA_SCENARIO, _scenario.value.name)
+                putExtra(MockLocationService.EXTRA_QUALITY, _quality.value.name)
                 putParcelableArrayListExtra(MockLocationService.EXTRA_ROUTE_POINTS, ArrayList(_routePoints.value))
             }
             context.startForegroundService(serviceIntent)

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 注入真值日志落在 Android/data/<pkg>/files/inject-logs/ -->
+    <external-files-path name="inject_logs" path="inject-logs/" />
+    <files-path name="inject_logs_internal" path="inject-logs/" />
+</paths>

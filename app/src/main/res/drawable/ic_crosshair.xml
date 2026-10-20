@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 定位准星：白色描边打底，保证在卫星影像上也能看清 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="56"
+    android:viewportHeight="56">
+
+    <!-- 白色光晕：十字臂 -->
+    <path
+        android:pathData="M28,5 L28,15 M28,41 L28,51 M5,28 L15,28 M41,28 L51,28"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- 白色光晕：外圈 -->
+    <path
+        android:pathData="M28,14 A14,14 0 1,0 28,42 A14,14 0 1,0 28,14 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:fillColor="#00000000" />
+
+    <!-- 蓝色十字臂 -->
+    <path
+        android:pathData="M28,5 L28,15 M28,41 L28,51 M5,28 L15,28 M41,28 L51,28"
+        android:strokeColor="#1E88E5"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- 蓝色外圈 -->
+    <path
+        android:pathData="M28,14 A14,14 0 1,0 28,42 A14,14 0 1,0 28,14 Z"
+        android:strokeColor="#1E88E5"
+        android:strokeWidth="3"
+        android:fillColor="#00000000" />
+
+    <!-- 中心点：白底 + 蓝点 -->
+    <path
+        android:pathData="M28,23 A5,5 0 1,0 28,33 A5,5 0 1,0 28,23 Z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M28,25 A3,3 0 1,0 28,31 A3,3 0 1,0 28,25 Z"
+        android:fillColor="#1E88E5" />
+</vector>
