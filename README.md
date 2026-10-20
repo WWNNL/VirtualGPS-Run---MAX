@@ -2,19 +2,25 @@
 
 一款免 Root 的 Android 虚拟跑步定位 App，支持在地图上规划路线并生成更接近真人跑步的连续轨迹。无需任何 API Key，国内网络直连即可使用。
 
-当前版本：**v1.0.4** · 最低支持 Android 8.0（API 26）
+当前版本：**v1.4.0-init**（versionCode 15）· 最低支持 Android 8.0（API 26）
+本仓库是 [uinaqx/VirtualGPS-Run---MAX](https://github.com/uinaqx/VirtualGPS-Run---MAX) 的分支，在上游 v1.0.4 基础上扩展了卫星地图、固定定位与一套注入测试台。
 
 ## 功能特性
 
-- **免 Root**：使用 Android 标准 Mock Location API，无需 Root 权限
-- **国内直连地图**：内置高德地图瓦片源，无需 VPN，无需 API Key，开箱即用
+### 地图与路线
+- **国内直连地图**：内置高德地图瓦片源，无需 VPN、无需 API Key，开箱即用
+- **卫星影像 + 地名地标**：一键在高德影像（`webst style=6`）与路网之间切换；卫星模式自动叠加同节点的透明注记层（`webst style=8`），路名、POI、楼栋号与影像精确对齐；「标签」按钮可临时关闭地名查看纯影像
 - **高倍地图缩放**：原生瓦片保持在稳定的 `z18`，通过本地超采样继续放大到 `z22`，避免高倍缩放后地图空白
 - **地图选点**：在地图上点击设置起点、途经点和终点
 - **绕圈循环跑**：再次点击起点标记即可闭合路线，支持无限循环跑步
-- **自然绕圈轨迹**：闭环路线使用定长圆角，并加入每圈轻微内外偏移，避免生硬折线和机械重合
-- **定位偏移修正**：在中国地图上点击定位时，自动将系统 WGS-84 坐标转换为 GCJ-02 显示，避免地图偏移
-- **配速调节**：可调节跑步配速（3-15 分钟/公里）
-- **快速调速**：起跑后快速跟上目标配速；跑步过程中修改目标配速会在下一次采样附近完成响应
+- **启动自动定位**：冷启动时自动飞到设备当前位置（缩放 `z17`）并落下准星，等待权限授予最多 15 秒，只执行一次
+
+### 定位模拟
+- **免 Root**：使用 Android 标准 Mock Location API，无需 Root 权限
+- **双模式**：顶部胶囊切换「路线跑 / 固定定位」。固定定位在地图上选一个点即可把系统定位钉在该点（速度恒 0），坐标经 GCJ-02 → WGS-84 反算后投递
+- **定位准星**：点「定位」在当前位置落一个带白色描边的准星标记，卫星影像上也可辨认
+- **定位偏移修正**：地图瓦片为 GCJ-02，投递前统一转 WGS-84，显示时再转回 GCJ-02
+- **配速调节**：可调节跑步配速（3-15 分钟/公里），起跑后快速跟上目标配速
 - **稳定速度范围**：稳定跑动时，报告速度和相邻轨迹推导速度均限制在目标速度的 ±15% 范围内
 - **自然速度扰动**：使用连续、相关的低频与高频波动，避免逐秒随机跳变
 - **立即停止**：点击停止后立即结束模拟定位，不再经历“平稳停止”或缓慢减速过程
@@ -24,6 +30,11 @@
 - **多通道定位**：同时投递 Android 系统定位和 Google Play 融合定位；融合通道异常时不阻塞系统定位，并自动重试。第三方应用是否接受模拟位置取决于其定位与记录策略
 - **实时进度**：显示路线距离、预计用时、跑步进度和当前配速
 
+### 注入测试台（本分支新增）
+- **场景预设**：自然轨迹 / 干净匀速 / 超速（8 m/s）/ 瞬移跳点 / 坐标抖动 / 高频掉点，每种对应一条检测规则；干净匀速与超速走 `LinearRouteSource`（无噪声、无圆角），与自然轨迹构成 A/B 对照组
+- **GPS 信号档位**：低 / 中 / 高 / 极致四档，控制水平精度、卫星数、海拔抖动、速度与方位精度；「极致」档所有指标恒定不游走，专门用于制造「过于完美」的反向样本
+- **注入真值日志**：每 200ms 一条 CSV，记录场景、档位、模式、时间戳、坐标、速度、方位、精度、海拔、自述卫星数、本端 mock 标记与是否实际推送，供检测端计算漏报 / 误报
+
 ## 截图
 
 ![最新版路线规划界面](screenshots/route-planning.png)
@@ -31,22 +42,24 @@
 
 ## 下载安装
 
-**[>>> 点击下载 VirtualRun v1.0.4 APK <<<](https://github.com/uinaqx/VirtualGPS-Run---MAX/releases/download/v1.0.4/VirtualRun-v1.0.4.apk)**
+本分支**未发布预编译 APK**，请按下文「构建项目」自行编译（产物为 `app-debug.apk`，Android Debug 签名，可直接安装测试）。
 
-也可以前往 [GitHub Releases](https://github.com/uinaqx/VirtualGPS-Run---MAX/releases/latest) 查看最新版本和更新说明。
+上游 v1.0.4 官方 APK 仍可从这里获取（不含本分支的卫星地图、固定定位与测试台功能）：
 
-- APK 版本：`1.0.4`（versionCode 5）
+**[>>> 上游 VirtualRun v1.0.4 APK <<<](https://github.com/uinaqx/VirtualGPS-Run---MAX/releases/download/v1.0.4/VirtualRun-v1.0.4.apk)**
+
+- 上游 APK 版本：`1.0.4`（versionCode 5）
 - SHA-256：`1937E2FA39A2F2861766BB297D39882585A1F589FC3C98946103869910066BAB`
 
-> 当前 APK 使用 Android Debug 签名，可直接安装测试；项目尚未配置用于应用商店发布的正式签名密钥。
+> 本分支与上游使用同一个 `applicationId`，但 debug 签名 keystore 不同：装过官方版本的设备需要先卸载，否则会报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。项目仍未配置应用商店发布用的正式签名。
 
 ## 使用方法
 
 ### 1. 安装与设置
 
-1. 下载上方 APK 并安装到 Android 手机
-2. 打开应用，授予**位置权限**和**通知权限**
-3. 进入 **设置 → 系统 → 开发者选项 → 选择模拟位置信息应用**，选择「虚拟跑步」
+1. 安装 APK 后打开应用，授予**位置权限**和**通知权限**
+2. 进入 **设置 → 系统 → 开发者选项 → 选择模拟位置信息应用**，选择「虚拟跑步」
+3. 首次进入会自动定位到当前位置；之后点右下角「定位」可随时回到设备位置（放大到 `z18`）
 
 > **提示**：如果找不到开发者选项，进入「关于手机」连续点击「版本号」7 次即可开启。
 
@@ -68,6 +81,40 @@
 
 > **注意**：开始跑步后，即使返回桌面或锁屏，虚拟定位仍会继续运行。
 
+### 4. 固定定位
+
+1. 顶部胶囊切到「固定定位」（运行中不可切换）
+2. 在地图上点一下选位置，或点右侧按钮取地图中心，地图上会出现紫色水滴针
+3. 点「开始」——系统定位固定在该点，速度恒 0，通知栏显示「固定定位进行中 · 坐标」
+4. 「停止」随时结束，「清除」连同选点一起清掉
+
+### 5. 卫星地图
+
+右上角卫星按钮在路网 / 卫星之间切换；进入卫星模式后，旁边的「标签」按钮可开关注记层。
+地名来自高德同节点的透明注记瓦片，与影像共用同一套 GCJ-02 网格，因此不会错位。
+
+### 6. 注入测试台
+
+底部两枚下拉按钮：
+
+- **场景**：选择注入形态（干净匀速、超速、瞬移、抖动、掉点等）
+- **信号**：选择 GPS 档位（低 / 中 / 高 / 极致）
+
+运行时右上角分享按钮导出最新一份真值日志 CSV。文件同时落在：
+
+```
+Android/data/com.virtualrun.app/files/inject-logs/inject-<时间>-<场景>-<档位>-<模式>.csv
+```
+
+字段：
+
+```
+seq,scenario,gps_quality,mode,wall_ms,elapsed_ns,lat,lng,speed_mps,bearing_deg,
+accuracy_m,altitude_m,satellites,mock_flag,is_completed,pushed
+```
+
+`pushed=false` 的行是人为制造的掉点；`mock_flag` 是本端自报的 `Location.isMock()`（≤API 30 用 `isFromMockProvider()`）。
+
 ## 构建项目
 
 ### 环境要求
@@ -82,7 +129,7 @@
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-APK 将生成在 `app/build/outputs/apk/debug/app-debug.apk`
+APK 将生成在 `app/build/outputs/apk/debug/app-debug.apk`，当前 19 个单元测试全部通过。
 
 ## 项目结构
 
@@ -93,17 +140,22 @@ app/src/main/java/com/virtualrun/app/
 │   └── RoutePoint.kt               # 数据模型（路线点、路线、运动状态）
 ├── service/
 │   ├── MockLocationService.kt      # 前台服务、通知与 UI 广播
-│   ├── MockLocationPump.kt         # 独立 5Hz 定位泵与 Provider 自恢复
+│   ├── MockLocationPump.kt         # 独立 5Hz 定位泵、场景变换与 Provider 自恢复
 │   ├── FusedLocationAdapters.kt    # 隔离的系统 Fused / Google FLP 通道
-│   ├── LocationSampleFactory.kt    # 统一时间戳与定位元数据
+│   ├── LocationSampleFactory.kt    # 统一时间戳、定位元数据与 GPS 档位
+│   ├── InjectLog.kt                # 注入真值日志（CSV）
 │   └── DeliveryBackoff.kt          # 有上限的快速重试策略
 ├── algorithm/
-│   └── TrajectoryInterpolator.kt   # 定长圆角、等距重采样、自然漂移与速度控制算法
+│   ├── TrajectoryInterpolator.kt   # 定长圆角、等距重采样、自然漂移与速度控制
+│   ├── InjectScenario.kt           # 注入场景枚举 + LinearRouteSource（干净匀速 / 超速，无噪声无圆角）
+│   ├── StaticPositionSource.kt     # 固定定位源（坐标恒定、速度 0）
+│   └── GpsQuality.kt               # GPS 信号档位
 ├── ui/
 │   ├── MainViewModel.kt            # 状态管理与业务逻辑
-│   └── OSMapScreen.kt              # osmdroid 地图界面与中国地图定位偏移修正
+│   └── OSMapScreen.kt              # osmdroid 地图界面、模式切换与坐标修正
 └── map/
-    ├── ChinaMapTileSource.kt       # 高德地图瓦片源与原生缩放上限
+    ├── ChinaMapTileSource.kt       # 高德路网瓦片源与原生缩放上限
+    ├── SatelliteTileSources.kt     # 高德卫星瓦片源 + 透明地名注记层
     └── CoordinateConverter.kt      # 坐标转换（GCJ-02 ↔ WGS-84）
 ```
 
@@ -111,7 +163,7 @@ app/src/main/java/com/virtualrun/app/
 
 - **语言**：Kotlin
 - **UI 框架**：Jetpack Compose + Material 3
-- **地图**：osmdroid + 高德地图瓦片源（国内直连，无需 API Key）
+- **地图**：osmdroid + 高德地图瓦片源（路网 / 卫星 / 注记，国内直连，无需 API Key）
 - **架构**：MVVM
 - **异步**：Kotlin Coroutines + Flow
 - **最低版本**：Android 8.0 (API 26)
@@ -122,7 +174,7 @@ app/src/main/java/com/virtualrun/app/
 - 前台服务保活，确保 APP 后台时定位持续生效
 - 同时模拟 `GPS_PROVIDER`、`NETWORK_PROVIDER` 和系统 `fused` 三个定位源
 - 显式启用 Google Play `FusedLocationProviderClient` mock 模式；是否被第三方记录仍取决于其定位与模拟位置策略
-- 补全海拔、精度、方位角、卫星数量等字段，提高模拟真实性
+- 补全海拔、精度、方位角、质量档位与卫星数量等字段，提高模拟真实性
 - 独立前台优先级 HandlerThread 默认以 5Hz（200ms）投递，支持配置为 10Hz
 - GPS/Network 自恢复；系统 Fused 与 Google FLP 分线程隔离，FLP 最新位置单槽缓存
 - 明确失败时按 250ms 至 5s 退避；不可取消的在途 Google Task 不重复堆积
@@ -137,18 +189,32 @@ app/src/main/java/com/virtualrun/app/
 - 时间推进：使用单调时钟与 100ms 内部积分步长，降低后台调度延迟造成的速度失真
 - GNSS 观测：缓慢变化海拔、精度、方位角精度和卫星数量，并限制相邻观测点的异常速度
 
+### 卫星地图与地名注记
+- 影像与注记都走高德 `webst0{1..4}` 节点，`style=6` 为影像（JPEG）、`style=8` 为透明注记层（RGBA PNG，实测约 77% 像素 alpha=0）
+- 两者共用同一套 GCJ-02 瓦片网格，`x/y/z` 直接对齐，无需额外坐标换算
+- 注记层用独立的 `TilesOverlay` + `MapTileProviderBasic` 叠在影像之上，默认关闭，切入卫星模式才启用
+- 坑：`webrd` 节点的 `style=8` 与 `webst` 的 `style=7` 都是不透明路网底图，叠加会把影像整块盖住，不能当地名层用
+
 ### 中国地图坐标修正
 - 地图瓦片使用 GCJ-02 坐标系
-- 虚拟定位发送给系统前会转换为 WGS-84
+- 虚拟定位发送给系统前会转换为 WGS-84（固定定位模式同样先做反算）
 - 点击定位按钮时，系统真实定位会从 WGS-84 转为 GCJ-02 后再显示到地图上，避免国内地图偏移
 - 高德栅格接口的真实瓦片请求限制在 `z18`；`z19-z22` 使用 osmdroid 本地超采样，因此不会空白，但画面会随放大逐渐像素化
+
+### 注入测试台
+- `InjectScenario` 决定生成什么形态：自然轨迹仍走 `TrajectoryInterpolator`；干净匀速 / 超速走 `LinearRouteSource`；瞬移、抖动、掉点在投递前对样本做变换
+- `GpsQuality` 决定样本的「接收机档位」：精度区间、卫星数区间、海拔抖动、速度 / 方位精度；`PRIME` 档把噪声清零、区间压成一个点，指标恒定
+- `InjectLog` 以追加方式写 CSV，每 25 条 flush 一次，写失败不影响注入本身
+- 能力边界：`accuracy`、`satellites` 只是 `Location` 对象的字段，Android 的 mock API 无法伪造 `GnssStatus` / `GnssMeasurements`（真实卫星观测来自 GNSS 芯片与 HAL），因此本分支提供的是「数值上像高端机」的测试样本，不是高保真 GNSS 仿真
 
 ## 注意事项
 
 1. **模拟位置权限**：使用前必须在开发者选项中将本应用设置为模拟位置应用，否则虚拟定位不会生效
 2. **后台限制**：部分国产 ROM（小米、华为等）可能会限制后台服务，如遇后台停止，请将本应用加入电池优化白名单或允许后台运行
-3. **检测风险**：某些应用可能会检测到使用了 Mock Location，请自行承担使用风险
+3. **检测风险**：某些应用可能会检测到使用了 Mock Location（`Location.isMock()`、开发者选项中的模拟应用包名等），请自行承担使用风险
 4. **坐标精度**：地图使用 GCJ-02 坐标系，虚拟定位自动转换为 WGS-84 发送给系统；地图定位显示会自动转换回 GCJ-02
+5. **瓦片授权**：高德栅格瓦片接口没有公开授权，个人自用风险较低；如需公开分发或商用，请改用有明确授权的底图服务（例如天地图，需自行申请 Key，并注意其坐标系为 CGCS2000/WGS-84，需同步调整坐标转换）
+6. **安装冲突**：本分支与上游 `applicationId` 相同但签名不同，切换安装时需先卸载
 
 ## 开源协议
 
@@ -163,6 +229,18 @@ app/src/main/java/com/virtualrun/app/
 欢迎提交 Issue 和 Pull Request！
 
 ## 更新日志
+
+### v1.4.0-init (2026-10-20)
+
+相对上游 v1.0.4 的功能扩展：
+
+- 新增高德卫星影像瓦片源，以及可叠加的透明地名注记层（路名 / POI / 楼栋号），并提供地名开关
+- 新增固定定位模式：地图选点后把系统定位钉死在该点，速度恒 0；投递前做 GCJ-02 → WGS-84 反算
+- 新增定位准星标记；冷启动自动定位到设备当前位置（等待权限授予，缩放 `z17`，只执行一次）
+- 新增注入测试台：6 种注入场景 + 4 档 GPS 信号质量，`LinearRouteSource` 提供无扰动对照组
+- 新增注入真值日志（CSV）与导出分享，字段包含场景、档位、精度、卫星数、mock 标记与是否实际推送
+- UI：底部信息卡改为无投影 + 细描边；定位悬浮按钮改为按底部面板实测高度让位，修复与新增控件重叠
+- 测试：新增 `LinearRouteSourceTest`、`StaticPositionSourceTest`、`GpsQualityTest`，单元测试从 12 项增至 19 项
 
 ### v1.0.4 (2026-09-08)
 - 将轨迹计算与定位投递分离，独立 5Hz 前台优先级定位泵，不依赖 UI 时钟
@@ -217,29 +295,3 @@ app/src/main/java/com/virtualrun/app/
 - 实现基础地图选点和路线规划
 - 实现 Mock Location 核心功能
 - 实现轨迹插值和速度扰动算法
-
-## 本分支新增（WWNNL fork，v1.4.0-init）
-
-在原版 v1.0.4 基础上新增，版本号统一为 `1.4.0-init`（versionCode 15）：
-
-- **卫星影像 + 地名地标**：右上角卫星按钮切换高德影像（`webst style=6`）与路网；卫星模式自动叠加同节点的透明注记层（`webst style=8`，实测 RGBA 透明底，只有路名/POI/楼栋号），可与影像精确对齐；旁边的「标签」按钮可临时关掉地名看纯影像。
-- **固定定位模式**：顶部胶囊切换「路线跑 / 固定定位」，固定模式下在地图选一个点即可把系统定位钉在该点（速度恒 0），坐标经过 GCJ-02 → WGS-84 反算，第三方 App 里看到的位置与所选点一致。
-- **定位准星**：点「定位」时在当前位置落一个准星标记（矢量图，带白色描边，卫星影像上也可辨认）。
-- **启动自动定位**：冷启动时等待定位权限授予（最多 15 秒），随后自动飞到设备当前位置并落下准星，缩放到 z17；只执行一次。
-- **GPS 信号档位（对冲测试）**：低 / 中 / 高 / 极致四档，控制精度、卫星数、海拔抖动、速度与方位精度；「极致」档指标恒定不游走，用于制造「过于完美」的样本。
-- **注入场景预设（对冲测试）**：自然轨迹 / 干净匀速 / 超速（8 m/s）/ 瞬移跳点 / 坐标抖动 / 高频掉点，每种对应一条检测规则；干净匀速与超速走新增的 `LinearRouteSource`（无噪声、无圆角），与自然轨迹构成 A/B 对照。
-- **注入真值日志**：每 200ms 一条 CSV，记录场景、GPS 档位、模式、时间戳、坐标、速度、方位、精度、海拔、自述卫星数、本端 mock 标记、是否实际推送，落盘于 `Android/data/com.virtualrun.app/files/inject-logs/`，可从底部「分享」按钮导出，供检测端计算漏报/误报。
-- **UI 细节**：底部两张信息卡改为无投影 + 细描边；定位悬浮按钮改为按底部面板实测高度让位，避免与新控件重叠。
-
-> 说明：`accuracy`、卫星数等只是 `Location` 对象的字段，Android 的 mock API 无法伪造 `GnssStatus` / `GnssMeasurements`（真实卫星观测来自 GNSS 芯片），因此本分支提供的是「数值上像高端机」的测试样本，不是高保真 GNSS 仿真。
-
-### 构建
-
-与上游一致（JDK 17 + Android SDK 34）：
-
-```bash
-./gradlew assembleDebug        # 产物 app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest    # 19 个单元测试
-```
-
-注意：与原版同一个 `applicationId`，但 debug 签名 keystore 不同，安装到已装官方 v1.0.4 的设备上需先卸载。
